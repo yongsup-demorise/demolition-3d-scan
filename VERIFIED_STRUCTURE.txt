@@ -1,0 +1,9 @@
+3D-01 구조 검증 대상
+- settings.gradle
+- build.gradle
+- gradle.properties
+- app/build.gradle
+- app/src/main/AndroidManifest.xml
+- MainActivity.java (ARCore RAW_DEPTH_ONLY, acquireRawDepthImage16Bits, confidence, point conversion)
+- BackgroundRenderer.java (camera OES background)
+- PointRenderer.java (OpenGL point cloud)
