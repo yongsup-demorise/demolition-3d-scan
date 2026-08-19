@@ -7,7 +7,6 @@ import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.view.Surface;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
@@ -48,7 +47,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private long lastDepthTs = -1;
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
-
   private Pose lastAccumulationPose = null;
   private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
   private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
@@ -112,10 +110,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     if(session==null)return;
     try {
       int rotation=getWindowManager().getDefaultDisplay().getRotation();
-
-      // Verified on the target Galaxy S25 Ultra: Android reports ROTATION_0 while
-      // the AR camera background is 180 degrees out. Compensate only the display
-      // geometry. World-space Raw Depth coordinates remain untouched.
       int arRotation=(rotation+2)%4;
 
       session.setDisplayGeometry(arRotation,width,height);
@@ -125,16 +119,14 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
       bg.draw(frame);
 
       if(cam.getTrackingState()!=TrackingState.TRACKING){
-        final int r=rotation;
-        final int ar=arRotation;
-        runOnUiThread(()->status.setText("추적 중… · ROT="+r+"→AR="+ar+" · "+width+"x"+height)); return;
+        final int r=rotation, ar=arRotation;
+        runOnUiThread(()->status.setText("추적 중… · ROT="+r+"→AR="+ar)); return;
       }
 
       try(Image depth=frame.acquireRawDepthImage16Bits(); Image confidence=frame.acquireRawDepthConfidenceImage()){
         if(depth.getTimestamp()!=lastDepthTs){
           lastDepthTs=depth.getTimestamp();
           FloatBuffer xyz=makePoints(cam,depth,confidence);
-
           boolean added=false;
           Pose currentPose=cam.getPose();
           if(shouldAccumulate(currentPose)){
@@ -143,17 +135,13 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             lastAccumulationPose=currentPose;
             added=true;
           }
-
           final int n=accumulatedPoints.size();
           final boolean frameAdded=added;
-          final int r=rotation;
-          final int ar=arRotation;
-          runOnUiThread(()->status.setText(
-                  "3D-01 · ROT="+r+"→AR="+ar+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
+          final int r=rotation, ar=arRotation;
+          runOnUiThread(()->status.setText("3D-01 · ROT="+r+"→AR="+ar+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
         }
       } catch(NotYetAvailableException e){
-        final int r=rotation;
-        final int ar=arRotation;
+        final int r=rotation, ar=arRotation;
         runOnUiThread(()->status.setText("Depth 준비 중… · ROT="+r+"→AR="+ar));
       }
 
@@ -165,18 +153,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
   private boolean shouldAccumulate(Pose currentPose){
     if(lastAccumulationPose==null)return true;
-
     float dx=currentPose.tx()-lastAccumulationPose.tx();
     float dy=currentPose.ty()-lastAccumulationPose.ty();
     float dz=currentPose.tz()-lastAccumulationPose.tz();
     float translation=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
-
     float[] a=lastAccumulationPose.getRotationQuaternion();
     float[] b=currentPose.getRotationQuaternion();
     float dot=Math.abs(a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3]);
     dot=Math.min(1.0f,Math.max(-1.0f,dot));
     float rotationDeg=(float)Math.toDegrees(2.0*Math.acos(dot));
-
     return translation>=MIN_ACCUM_TRANSLATION_M || rotationDeg>=MIN_ACCUM_ROTATION_DEG;
   }
 
@@ -205,7 +190,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         int mm=db.getShort(di)&0xffff;
         if(mm<250||mm>8000)continue;
         float distance=mm/1000f;
-        cameraPoint[0]=(x-cx)*distance/fx;
+
+        // The camera background is intentionally mirrored in screen space by
+        // BackgroundRenderer. Mirror only Raw Depth X so the green points use
+        // the same left/right convention; Y/Z and world pose stay unchanged.
+        cameraPoint[0]=-(x-cx)*distance/fx;
         cameraPoint[1]=-(y-cy)*distance/fy;
         cameraPoint[2]=-distance;
         pose.transformPoint(cameraPoint,0,worldPoint,0);
