@@ -150,7 +150,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     Image.Plane depthPlane=depth.getPlanes()[0], confPlane=confidence.getPlanes()[0];
     ByteBuffer db=depthPlane.getBuffer().order(ByteOrder.LITTLE_ENDIAN), cb=confPlane.getBuffer();
     int dr=depthPlane.getRowStride(), dp=depthPlane.getPixelStride(), cr=confPlane.getRowStride(), cp=confPlane.getPixelStride();
-    CameraIntrinsics intr=cam.getImageIntrinsics();
+
+    // Raw Depth is produced at the GPU/texture aspect ratio. ARCore's Raw Depth
+    // reference implementation therefore unprojects it with texture intrinsics,
+    // scaled to the actual depth image resolution.
+    CameraIntrinsics intr=cam.getTextureIntrinsics();
     float[] focal=intr.getFocalLength(), principal=intr.getPrincipalPoint();
     int[] dim=intr.getImageDimensions();
     float sx=(float)w/dim[0], sy=(float)h/dim[1];
