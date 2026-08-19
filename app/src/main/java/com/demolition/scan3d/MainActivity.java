@@ -203,7 +203,12 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private FloatBuffer accumulatePoints(FloatBuffer xyz){
     while(xyz.remaining()>=3 && accumulatedPoints.size()<MAX_ACCUMULATED_POINTS){
       float x=xyz.get(), y=xyz.get(), z=xyz.get();
-      int qx=Math.round(x*100), qy=Math.round(y*100), qz=Math.round(z*100);
+
+      // Change only duplicate merging: 1 cm cells -> 2 cm cells.
+      // All camera, depth, pose and accumulation-trigger logic stays identical.
+      int qx=Math.round(x*50f);
+      int qy=Math.round(y*50f);
+      int qz=Math.round(z*50f);
       String key=qx+"_"+qy+"_"+qz;
       if(pointKeys.add(key))accumulatedPoints.add(new float[]{x,y,z});
     }
