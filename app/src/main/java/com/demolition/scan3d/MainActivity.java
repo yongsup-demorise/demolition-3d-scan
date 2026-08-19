@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
   private Pose lastAccumulationPose = null;
-  private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
+  private static final float MIN_ACCUM_TRANSLATION_M = 0.05f;
   private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
   private static final int MIN_DEPTH_CONFIDENCE = 144;
 
