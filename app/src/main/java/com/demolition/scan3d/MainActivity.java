@@ -43,14 +43,13 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private int height = 1;
   private final java.util.ArrayList<float[]> accumulatedPoints = new java.util.ArrayList<>();
   private static final int MAX_ACCUMULATED_POINTS = 200000;
-  private static final float VOXEL_SIZE_M = 0.05f;
   private final java.util.HashSet<String> pointKeys = new java.util.HashSet<>();
   private long lastDepthTs = -1;
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
   private Pose lastAccumulationPose = null;
-  private static final float MIN_ACCUM_TRANSLATION_M = 0.05f;
-  private static final float MIN_ACCUM_ROTATION_DEG = 4.0f;
+  private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
+  private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -112,6 +111,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     try {
       int rotation=getWindowManager().getDefaultDisplay().getRotation();
       int arRotation=(rotation+2)%4;
+
       session.setDisplayGeometry(arRotation,width,height);
       session.setCameraTextureName(bg.textureId());
       Frame frame=session.update();
@@ -170,6 +170,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     Image.Plane depthPlane=depth.getPlanes()[0], confPlane=confidence.getPlanes()[0];
     ByteBuffer db=depthPlane.getBuffer().order(ByteOrder.LITTLE_ENDIAN), cb=confPlane.getBuffer();
     int dr=depthPlane.getRowStride(), dp=depthPlane.getPixelStride(), cr=confPlane.getRowStride(), cp=confPlane.getPixelStride();
+
     CameraIntrinsics intr=cam.getTextureIntrinsics();
     float[] focal=intr.getFocalLength(), principal=intr.getPrincipalPoint();
     int[] dim=intr.getImageDimensions();
@@ -202,9 +203,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private FloatBuffer accumulatePoints(FloatBuffer xyz){
     while(xyz.remaining()>=3 && accumulatedPoints.size()<MAX_ACCUMULATED_POINTS){
       float x=xyz.get(), y=xyz.get(), z=xyz.get();
-      int qx=(int)Math.floor(x/VOXEL_SIZE_M);
-      int qy=(int)Math.floor(y/VOXEL_SIZE_M);
-      int qz=(int)Math.floor(z/VOXEL_SIZE_M);
+      int qx=Math.round(x*100), qy=Math.round(y*100), qz=Math.round(z*100);
       String key=qx+"_"+qy+"_"+qz;
       if(pointKeys.add(key))accumulatedPoints.add(new float[]{x,y,z});
     }
