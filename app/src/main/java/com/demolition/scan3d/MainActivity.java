@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private int height = 1;
   private final java.util.ArrayList<float[]> accumulatedPoints = new java.util.ArrayList<>();
   private static final int MAX_ACCUMULATED_POINTS = 200000;
+  private static final float VOXEL_SIZE_M = 0.03f;
   private final java.util.HashSet<String> pointKeys = new java.util.HashSet<>();
   private long lastDepthTs = -1;
   private final float[] proj = new float[16];
@@ -111,7 +112,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     try {
       int rotation=getWindowManager().getDefaultDisplay().getRotation();
       int arRotation=(rotation+2)%4;
-
       session.setDisplayGeometry(arRotation,width,height);
       session.setCameraTextureName(bg.textureId());
       Frame frame=session.update();
@@ -170,7 +170,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     Image.Plane depthPlane=depth.getPlanes()[0], confPlane=confidence.getPlanes()[0];
     ByteBuffer db=depthPlane.getBuffer().order(ByteOrder.LITTLE_ENDIAN), cb=confPlane.getBuffer();
     int dr=depthPlane.getRowStride(), dp=depthPlane.getPixelStride(), cr=confPlane.getRowStride(), cp=confPlane.getPixelStride();
-
     CameraIntrinsics intr=cam.getTextureIntrinsics();
     float[] focal=intr.getFocalLength(), principal=intr.getPrincipalPoint();
     int[] dim=intr.getImageDimensions();
@@ -190,10 +189,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         int mm=db.getShort(di)&0xffff;
         if(mm<250||mm>8000)continue;
         float distance=mm/1000f;
-
-        // The camera background is intentionally mirrored in screen space by
-        // BackgroundRenderer. Mirror only Raw Depth X so the green points use
-        // the same left/right convention; Y/Z and world pose stay unchanged.
         cameraPoint[0]=-(x-cx)*distance/fx;
         cameraPoint[1]=-(y-cy)*distance/fy;
         cameraPoint[2]=-distance;
@@ -207,9 +202,17 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private FloatBuffer accumulatePoints(FloatBuffer xyz){
     while(xyz.remaining()>=3 && accumulatedPoints.size()<MAX_ACCUMULATED_POINTS){
       float x=xyz.get(), y=xyz.get(), z=xyz.get();
-      int qx=Math.round(x*100), qy=Math.round(y*100), qz=Math.round(z*100);
+
+      // 3 cm world-space voxel filter: keep one representative point per cell.
+      // This suppresses repeated Raw Depth samples from the same surface while
+      // preserving enough detail for demolition-area measurements.
+      int qx=(int)Math.floor(x/VOXEL_SIZE_M);
+      int qy=(int)Math.floor(y/VOXEL_SIZE_M);
+      int qz=(int)Math.floor(z/VOXEL_SIZE_M);
       String key=qx+"_"+qy+"_"+qz;
-      if(pointKeys.add(key))accumulatedPoints.add(new float[]{x,y,z});
+      if(pointKeys.add(key)){
+        accumulatedPoints.add(new float[]{x,y,z});
+      }
     }
     FloatBuffer result=ByteBuffer.allocateDirect(accumulatedPoints.size()*3*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     for(float[] p:accumulatedPoints){ result.put(p[0]); result.put(p[1]); result.put(p[2]); }
