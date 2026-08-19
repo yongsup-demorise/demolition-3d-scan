@@ -54,6 +54,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private static final int MIN_DEPTH_CONFIDENCE = 144;
   private static final float MIN_WALL_AREA_M2 = 1.0f;
   private static final float MIN_HORIZONTAL_AREA_M2 = 1.5f;
+  private static final float FLOOR_HEIGHT_DELTA_M = -0.65f;
+  private static final float CEILING_HEIGHT_DELTA_M = 0.50f;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -193,12 +195,12 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
       float planeY=plane.getCenterPose().ty();
       float dy=planeY-cameraY;
 
-      // A large horizontal plane well below the camera is a floor candidate.
-      // A large downward-facing plane above the camera is a ceiling candidate.
-      // Mid-height surfaces remain furniture/other horizontal candidates.
-      if(dy<=-0.65f && type==Plane.Type.HORIZONTAL_UPWARD_FACING){
+      // Height is the primary room-surface signal. ARCore can occasionally
+      // report the opposite horizontal facing while a plane is still growing,
+      // so ceiling classification no longer depends on DOWNWARD_FACING only.
+      if(dy<=FLOOR_HEIGHT_DELTA_M && type==Plane.Type.HORIZONTAL_UPWARD_FACING){
         summary.floors++;
-      } else if(dy>=0.65f && type==Plane.Type.HORIZONTAL_DOWNWARD_FACING){
+      } else if(dy>=CEILING_HEIGHT_DELTA_M){
         summary.ceilings++;
       } else {
         summary.otherHorizontal++;
