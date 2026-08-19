@@ -52,6 +52,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
   private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
   private static final int MIN_DEPTH_CONFIDENCE = 144;
+  private static final float MIN_WALL_AREA_M2 = 1.0f;
+  private static final float MIN_HORIZONTAL_AREA_M2 = 1.5f;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -141,10 +143,13 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
           final int n=accumulatedPoints.size();
           final boolean frameAdded=added;
           final int r=rotation, ar=arRotation;
-          final int[] planeCounts=countTrackedPlanes();
+          final PlaneSummary planeSummary=summarizeLargePlanes(currentPose);
           runOnUiThread(()->status.setText(
                   "3D-01 · ROT="+r+"→AR="+ar+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")+
-                  "\n평면 · 벽 "+planeCounts[0]+" · 바닥/천장 "+planeCounts[1]));
+                  "\n후보 · 벽 "+planeSummary.walls+
+                  " · 바닥 "+planeSummary.floors+
+                  " · 천장 "+planeSummary.ceilings+
+                  " · 기타수평 "+planeSummary.otherHorizontal));
         }
       } catch(NotYetAvailableException e){
         final int r=rotation, ar=arRotation;
@@ -157,18 +162,49 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     } catch(Throwable t){ runOnUiThread(()->status.setText("오류: "+t.getClass().getSimpleName())); }
   }
 
-  private int[] countTrackedPlanes(){
-    int vertical=0;
-    int horizontal=0;
-    if(session==null)return new int[]{0,0};
+  private static class PlaneSummary {
+    int walls;
+    int floors;
+    int ceilings;
+    int otherHorizontal;
+  }
+
+  private PlaneSummary summarizeLargePlanes(Pose cameraPose){
+    PlaneSummary summary=new PlaneSummary();
+    if(session==null)return summary;
+    float cameraY=cameraPose.ty();
+
     for(Plane plane:session.getAllTrackables(Plane.class)){
       if(plane.getTrackingState()!=TrackingState.TRACKING)continue;
       if(plane.getSubsumedBy()!=null)continue;
-      if(plane.getType()==Plane.Type.VERTICAL)vertical++;
-      else if(plane.getType()==Plane.Type.HORIZONTAL_UPWARD_FACING ||
-              plane.getType()==Plane.Type.HORIZONTAL_DOWNWARD_FACING)horizontal++;
+
+      float area=plane.getExtentX()*plane.getExtentZ();
+      Plane.Type type=plane.getType();
+
+      if(type==Plane.Type.VERTICAL){
+        if(area>=MIN_WALL_AREA_M2)summary.walls++;
+        continue;
+      }
+
+      if(type!=Plane.Type.HORIZONTAL_UPWARD_FACING &&
+              type!=Plane.Type.HORIZONTAL_DOWNWARD_FACING)continue;
+      if(area<MIN_HORIZONTAL_AREA_M2)continue;
+
+      float planeY=plane.getCenterPose().ty();
+      float dy=planeY-cameraY;
+
+      // A large horizontal plane well below the camera is a floor candidate.
+      // A large downward-facing plane above the camera is a ceiling candidate.
+      // Mid-height surfaces remain furniture/other horizontal candidates.
+      if(dy<=-0.65f && type==Plane.Type.HORIZONTAL_UPWARD_FACING){
+        summary.floors++;
+      } else if(dy>=0.65f && type==Plane.Type.HORIZONTAL_DOWNWARD_FACING){
+        summary.ceilings++;
+      } else {
+        summary.otherHorizontal++;
+      }
     }
-    return new int[]{vertical,horizontal};
+    return summary;
   }
 
   private boolean shouldAccumulate(Pose currentPose){
