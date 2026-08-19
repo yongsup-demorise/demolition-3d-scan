@@ -49,9 +49,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
 
-  // Diagnostic mode: draw only the newest Raw Depth frame so old accumulated
-  // points cannot hide a camera/depth registration error.
-  private static final boolean ALIGNMENT_DIAGNOSTIC_MODE = true;
+  // Add a new cloud only after the camera has moved enough. This prevents many
+  // nearly-identical noisy Raw Depth frames from thickening walls and edges.
+  private Pose lastAccumulationPose = null;
+  private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
+  private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -136,18 +138,19 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
           lastDepthTs=depth.getTimestamp();
           FloatBuffer xyz=makePoints(cam,depth,confidence);
 
-          final int n;
-          if(ALIGNMENT_DIAGNOSTIC_MODE){
-            points.update(xyz);
-            n=xyz.limit()/3;
-          } else {
+          boolean added=false;
+          Pose currentPose=cam.getPose();
+          if(shouldAccumulate(currentPose)){
             FloatBuffer accumulated=accumulatePoints(xyz);
             points.update(accumulated);
-            n=accumulated.limit()/3;
+            lastAccumulationPose=currentPose;
+            added=true;
           }
 
-          final String mode=ALIGNMENT_DIAGNOSTIC_MODE ? "현재 프레임" : "누적";
-          runOnUiThread(()->status.setText("3D-01 · Raw Depth 정상 · "+mode+" "+n+"개"));
+          final int n=accumulatedPoints.size();
+          final boolean frameAdded=added;
+          runOnUiThread(()->status.setText(
+                  "3D-01 · Raw Depth 정상 · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
         }
       } catch(NotYetAvailableException e){ runOnUiThread(()->status.setText("Depth 준비 중… 주변을 천천히 비춰주세요")); }
 
@@ -155,6 +158,23 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
       cam.getViewMatrix(view,0);
       points.draw(view,proj);
     } catch(Throwable t){ runOnUiThread(()->status.setText("오류: "+t.getClass().getSimpleName())); }
+  }
+
+  private boolean shouldAccumulate(Pose currentPose){
+    if(lastAccumulationPose==null)return true;
+
+    float dx=currentPose.tx()-lastAccumulationPose.tx();
+    float dy=currentPose.ty()-lastAccumulationPose.ty();
+    float dz=currentPose.tz()-lastAccumulationPose.tz();
+    float translation=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+
+    float[] a=lastAccumulationPose.getRotationQuaternion();
+    float[] b=currentPose.getRotationQuaternion();
+    float dot=Math.abs(a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3]);
+    dot=Math.min(1.0f,Math.max(-1.0f,dot));
+    float rotationDeg=(float)Math.toDegrees(2.0*Math.acos(dot));
+
+    return translation>=MIN_ACCUM_TRANSLATION_M || rotationDeg>=MIN_ACCUM_ROTATION_DEG;
   }
 
   private FloatBuffer makePoints(Camera cam,Image depth,Image confidence){
@@ -176,7 +196,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         int ci=y*cr+x*cp;
         if(ci<0||ci>=cb.limit())continue;
         int confidenceValue=cb.get(ci)&0xff;
-        if(confidenceValue<64)continue;
+        if(confidenceValue<128)continue;
         int di=y*dr+x*dp;
         if(di<0||di+1>=db.limit())continue;
         int mm=db.getShort(di)&0xffff;
