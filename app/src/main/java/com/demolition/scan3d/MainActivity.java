@@ -19,6 +19,7 @@ import com.google.ar.core.Camera;
 import com.google.ar.core.CameraIntrinsics;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
+import com.google.ar.core.Plane;
 import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.TrackingState;
@@ -88,6 +89,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         Config config=session.getConfig();
         config.setDepthMode(Config.DepthMode.RAW_DEPTH_ONLY);
         config.setFocusMode(Config.FocusMode.AUTO);
+        config.setPlaneFindingMode(Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL);
         session.configure(config);
       } catch (Exception e) { status.setText("ARCore 시작 오류: "+e.getClass().getSimpleName()); return; }
     }
@@ -139,7 +141,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
           final int n=accumulatedPoints.size();
           final boolean frameAdded=added;
           final int r=rotation, ar=arRotation;
-          runOnUiThread(()->status.setText("3D-01 · ROT="+r+"→AR="+ar+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
+          final int[] planeCounts=countTrackedPlanes();
+          runOnUiThread(()->status.setText(
+                  "3D-01 · ROT="+r+"→AR="+ar+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")+
+                  "\n평면 · 벽 "+planeCounts[0]+" · 바닥/천장 "+planeCounts[1]));
         }
       } catch(NotYetAvailableException e){
         final int r=rotation, ar=arRotation;
@@ -150,6 +155,20 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
       cam.getViewMatrix(view,0);
       points.draw(view,proj);
     } catch(Throwable t){ runOnUiThread(()->status.setText("오류: "+t.getClass().getSimpleName())); }
+  }
+
+  private int[] countTrackedPlanes(){
+    int vertical=0;
+    int horizontal=0;
+    if(session==null)return new int[]{0,0};
+    for(Plane plane:session.getAllTrackables(Plane.class)){
+      if(plane.getTrackingState()!=TrackingState.TRACKING)continue;
+      if(plane.getSubsumedBy()!=null)continue;
+      if(plane.getType()==Plane.Type.VERTICAL)vertical++;
+      else if(plane.getType()==Plane.Type.HORIZONTAL_UPWARD_FACING ||
+              plane.getType()==Plane.Type.HORIZONTAL_DOWNWARD_FACING)horizontal++;
+    }
+    return new int[]{vertical,horizontal};
   }
 
   private boolean shouldAccumulate(Pose currentPose){
