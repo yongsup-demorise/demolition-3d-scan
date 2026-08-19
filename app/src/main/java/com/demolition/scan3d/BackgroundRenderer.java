@@ -14,7 +14,6 @@ class BackgroundRenderer {
  private int tex, prog, pos, uv;
  private FloatBuffer vb, tb;
 
- // ARCore display UV coordinate convention.
  private final float[] uvs = {
          0,0,
          1,0,
@@ -65,16 +64,27 @@ class BackgroundRenderer {
 
   if (f.hasDisplayGeometryChanged()) {
     FloatBuffer input = fb(uvs);
-    FloatBuffer output = ByteBuffer.allocateDirect(8 * 4)
+    FloatBuffer transformed = ByteBuffer.allocateDirect(8 * 4)
             .order(ByteOrder.nativeOrder())
             .asFloatBuffer();
 
-    // setDisplayGeometry() is the single source of truth for rotation/cropping.
-    // Do not apply an additional manual flip here; doing so makes the camera
-    // background use a different display transform from the 3D projection.
-    f.transformDisplayUvCoords(input, output);
-    output.rewind();
-    tb = output;
+    // ARCore owns rotation/cropping. The target device still presents the
+    // camera background horizontally mirrored after the verified 180-degree
+    // display compensation, so mirror only the final texture U coordinate.
+    f.transformDisplayUvCoords(input, transformed);
+    transformed.rewind();
+
+    FloatBuffer mirrored = ByteBuffer.allocateDirect(8 * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer();
+    while (transformed.remaining() >= 2) {
+      float u = transformed.get();
+      float v = transformed.get();
+      mirrored.put(1.0f - u);
+      mirrored.put(v);
+    }
+    mirrored.flip();
+    tb = mirrored;
   }
 
   GLES20.glDisable(GLES20.GL_DEPTH_TEST);
