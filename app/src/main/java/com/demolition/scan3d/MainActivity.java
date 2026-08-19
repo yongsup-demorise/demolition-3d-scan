@@ -50,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private Pose lastAccumulationPose = null;
   private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
   private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
+  private static final int MIN_DEPTH_CONFIDENCE = 160;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -184,7 +185,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         int ci=y*cr+x*cp;
         if(ci<0||ci>=cb.limit())continue;
         int confidenceValue=cb.get(ci)&0xff;
-        if(confidenceValue<128)continue;
+        if(confidenceValue<MIN_DEPTH_CONFIDENCE)continue;
         int di=y*dr+x*dp;
         if(di<0||di+1>=db.limit())continue;
         int mm=db.getShort(di)&0xffff;
@@ -203,9 +204,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private FloatBuffer accumulatePoints(FloatBuffer xyz){
     while(xyz.remaining()>=3 && accumulatedPoints.size()<MAX_ACCUMULATED_POINTS){
       float x=xyz.get(), y=xyz.get(), z=xyz.get();
-
-      // Change only duplicate merging: 1 cm cells -> 2 cm cells.
-      // All camera, depth, pose and accumulation-trigger logic stays identical.
       int qx=Math.round(x*50f);
       int qy=Math.round(y*50f);
       int qz=Math.round(z*50f);
