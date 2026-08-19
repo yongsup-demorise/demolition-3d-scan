@@ -112,14 +112,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     if(session==null)return;
     try {
       int rotation=getWindowManager().getDefaultDisplay().getRotation();
-      int arRotation;
-      switch(rotation){
-        case Surface.ROTATION_90: arRotation=Surface.ROTATION_90; break;
-        case Surface.ROTATION_180: arRotation=Surface.ROTATION_180; break;
-        case Surface.ROTATION_270: arRotation=Surface.ROTATION_270; break;
-        case Surface.ROTATION_0:
-        default: arRotation=Surface.ROTATION_0; break;
-      }
+
+      // Verified on the target Galaxy S25 Ultra: Android reports ROTATION_0 while
+      // the AR camera background is 180 degrees out. Compensate only the display
+      // geometry. World-space Raw Depth coordinates remain untouched.
+      int arRotation=(rotation+2)%4;
 
       session.setDisplayGeometry(arRotation,width,height);
       session.setCameraTextureName(bg.textureId());
@@ -129,7 +126,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
       if(cam.getTrackingState()!=TrackingState.TRACKING){
         final int r=rotation;
-        runOnUiThread(()->status.setText("추적 중… · ROT="+r+" · 화면 "+width+"x"+height)); return;
+        final int ar=arRotation;
+        runOnUiThread(()->status.setText("추적 중… · ROT="+r+"→AR="+ar+" · "+width+"x"+height)); return;
       }
 
       try(Image depth=frame.acquireRawDepthImage16Bits(); Image confidence=frame.acquireRawDepthConfidenceImage()){
@@ -149,14 +147,14 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
           final int n=accumulatedPoints.size();
           final boolean frameAdded=added;
           final int r=rotation;
-          final int sw=width;
-          final int sh=height;
+          final int ar=arRotation;
           runOnUiThread(()->status.setText(
-                  "3D-01 · ROT="+r+" · "+sw+"x"+sh+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
+                  "3D-01 · ROT="+r+"→AR="+ar+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
         }
       } catch(NotYetAvailableException e){
         final int r=rotation;
-        runOnUiThread(()->status.setText("Depth 준비 중… · ROT="+r+" · 화면 "+width+"x"+height));
+        final int ar=arRotation;
+        runOnUiThread(()->status.setText("Depth 준비 중… · ROT="+r+"→AR="+ar));
       }
 
       cam.getProjectionMatrix(proj,0,0.1f,20f);
