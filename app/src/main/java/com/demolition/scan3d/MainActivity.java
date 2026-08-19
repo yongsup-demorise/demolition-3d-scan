@@ -50,7 +50,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private Pose lastAccumulationPose = null;
   private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
   private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
-  private static final int MIN_DEPTH_CONFIDENCE = 160;
+  private static final int MIN_DEPTH_CONFIDENCE = 144;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
