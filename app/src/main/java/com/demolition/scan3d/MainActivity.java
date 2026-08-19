@@ -49,8 +49,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
 
-  // Add a new cloud only after the camera has moved enough. This prevents many
-  // nearly-identical noisy Raw Depth frames from thickening walls and edges.
   private Pose lastAccumulationPose = null;
   private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
   private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
@@ -130,7 +128,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
       bg.draw(frame);
 
       if(cam.getTrackingState()!=TrackingState.TRACKING){
-        runOnUiThread(()->status.setText("추적 중… 휴대폰을 천천히 움직이세요")); return;
+        final int r=rotation;
+        runOnUiThread(()->status.setText("추적 중… · ROT="+r+" · 화면 "+width+"x"+height)); return;
       }
 
       try(Image depth=frame.acquireRawDepthImage16Bits(); Image confidence=frame.acquireRawDepthConfidenceImage()){
@@ -149,10 +148,16 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
           final int n=accumulatedPoints.size();
           final boolean frameAdded=added;
+          final int r=rotation;
+          final int sw=width;
+          final int sh=height;
           runOnUiThread(()->status.setText(
-                  "3D-01 · Raw Depth 정상 · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
+                  "3D-01 · ROT="+r+" · "+sw+"x"+sh+" · 누적 "+n+"개 · "+(frameAdded ? "추가" : "이동 대기")));
         }
-      } catch(NotYetAvailableException e){ runOnUiThread(()->status.setText("Depth 준비 중… 주변을 천천히 비춰주세요")); }
+      } catch(NotYetAvailableException e){
+        final int r=rotation;
+        runOnUiThread(()->status.setText("Depth 준비 중… · ROT="+r+" · 화면 "+width+"x"+height));
+      }
 
       cam.getProjectionMatrix(proj,0,0.1f,20f);
       cam.getViewMatrix(view,0);
