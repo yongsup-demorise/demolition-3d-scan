@@ -49,6 +49,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
 
+  // Diagnostic mode: draw only the newest Raw Depth frame so old accumulated
+  // points cannot hide a camera/depth registration error.
+  private static final boolean ALIGNMENT_DIAGNOSTIC_MODE = true;
+
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
     FrameLayout root = new FrameLayout(this);
@@ -117,7 +121,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         default: arRotation=Surface.ROTATION_0; break;
       }
 
-      // ARCore owns display rotation/cropping. No extra 180-degree compensation.
       session.setDisplayGeometry(arRotation,width,height);
       session.setCameraTextureName(bg.textureId());
       Frame frame=session.update();
@@ -132,10 +135,19 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         if(depth.getTimestamp()!=lastDepthTs){
           lastDepthTs=depth.getTimestamp();
           FloatBuffer xyz=makePoints(cam,depth,confidence);
-          FloatBuffer accumulated=accumulatePoints(xyz);
-          points.update(accumulated);
-          final int n=accumulated.limit()/3;
-          runOnUiThread(()->status.setText("3D-01 · Raw Depth 정상 · 포인트 "+n+"개"));
+
+          final int n;
+          if(ALIGNMENT_DIAGNOSTIC_MODE){
+            points.update(xyz);
+            n=xyz.limit()/3;
+          } else {
+            FloatBuffer accumulated=accumulatePoints(xyz);
+            points.update(accumulated);
+            n=accumulated.limit()/3;
+          }
+
+          final String mode=ALIGNMENT_DIAGNOSTIC_MODE ? "현재 프레임" : "누적";
+          runOnUiThread(()->status.setText("3D-01 · Raw Depth 정상 · "+mode+" "+n+"개"));
         }
       } catch(NotYetAvailableException e){ runOnUiThread(()->status.setText("Depth 준비 중… 주변을 천천히 비춰주세요")); }
 
@@ -151,9 +163,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     ByteBuffer db=depthPlane.getBuffer().order(ByteOrder.LITTLE_ENDIAN), cb=confPlane.getBuffer();
     int dr=depthPlane.getRowStride(), dp=depthPlane.getPixelStride(), cr=confPlane.getRowStride(), cp=confPlane.getPixelStride();
 
-    // Raw Depth is produced at the GPU/texture aspect ratio. ARCore's Raw Depth
-    // reference implementation therefore unprojects it with texture intrinsics,
-    // scaled to the actual depth image resolution.
     CameraIntrinsics intr=cam.getTextureIntrinsics();
     float[] focal=intr.getFocalLength(), principal=intr.getPrincipalPoint();
     int[] dim=intr.getImageDimensions();
