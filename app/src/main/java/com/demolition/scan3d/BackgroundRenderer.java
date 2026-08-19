@@ -51,11 +51,14 @@ class BackgroundRenderer {
   pos = GLES20.glGetAttribLocation(prog, "a");
   uv = GLES20.glGetAttribLocation(prog, "u");
 
+  // Keep ARCore's transformed texture coordinates untouched. Correct only the
+  // screen-space left/right vertex assignment. This changes one axis only and
+  // preserves the verified vertical orientation from ROT=0 -> AR=2.
   vb = fb(new float[]{
-          -1,-1,
           1,-1,
-          -1,1,
-          1,1
+          -1,-1,
+          1,1,
+          -1,1
   });
 
   tb = fb(uvs);
@@ -69,9 +72,6 @@ class BackgroundRenderer {
             .order(ByteOrder.nativeOrder())
             .asFloatBuffer();
 
-    // setDisplayGeometry() is the single source of truth for rotation/cropping.
-    // No manual UV mirroring: this is the verified baseline where vertical
-    // orientation is correct with ROT=0 -> AR=2.
     f.transformDisplayUvCoords(input, output);
     output.rewind();
     tb = output;
