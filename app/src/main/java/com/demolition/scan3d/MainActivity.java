@@ -43,14 +43,14 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private int height = 1;
   private final java.util.ArrayList<float[]> accumulatedPoints = new java.util.ArrayList<>();
   private static final int MAX_ACCUMULATED_POINTS = 200000;
-  private static final float VOXEL_SIZE_M = 0.03f;
+  private static final float VOXEL_SIZE_M = 0.05f;
   private final java.util.HashSet<String> pointKeys = new java.util.HashSet<>();
   private long lastDepthTs = -1;
   private final float[] proj = new float[16];
   private final float[] view = new float[16];
   private Pose lastAccumulationPose = null;
-  private static final float MIN_ACCUM_TRANSLATION_M = 0.035f;
-  private static final float MIN_ACCUM_ROTATION_DEG = 3.0f;
+  private static final float MIN_ACCUM_TRANSLATION_M = 0.05f;
+  private static final float MIN_ACCUM_ROTATION_DEG = 4.0f;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -202,17 +202,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
   private FloatBuffer accumulatePoints(FloatBuffer xyz){
     while(xyz.remaining()>=3 && accumulatedPoints.size()<MAX_ACCUMULATED_POINTS){
       float x=xyz.get(), y=xyz.get(), z=xyz.get();
-
-      // 3 cm world-space voxel filter: keep one representative point per cell.
-      // This suppresses repeated Raw Depth samples from the same surface while
-      // preserving enough detail for demolition-area measurements.
       int qx=(int)Math.floor(x/VOXEL_SIZE_M);
       int qy=(int)Math.floor(y/VOXEL_SIZE_M);
       int qz=(int)Math.floor(z/VOXEL_SIZE_M);
       String key=qx+"_"+qy+"_"+qz;
-      if(pointKeys.add(key)){
-        accumulatedPoints.add(new float[]{x,y,z});
-      }
+      if(pointKeys.add(key))accumulatedPoints.add(new float[]{x,y,z});
     }
     FloatBuffer result=ByteBuffer.allocateDirect(accumulatedPoints.size()*3*4).order(ByteOrder.nativeOrder()).asFloatBuffer();
     for(float[] p:accumulatedPoints){ result.put(p[0]); result.put(p[1]); result.put(p[2]); }
